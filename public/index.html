@@ -6,9 +6,7 @@
 <meta name="color-scheme" content="dark">
 <title>SoundClub</title>
 <style>
-  /* ── Reset & Base ── */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
   :root {
     --bg:       #0a0a0a;
     --surface:  #141414;
@@ -16,25 +14,269 @@
     --border:   #2a2a2a;
     --text:     #e0e0e0;
     --muted:    #808080;
-    --accent:   #ff5500;
-    --player-h: 72px;
+    --accent:   #ff0000;
+    --player-h: 260px;
     --safe-bot: env(safe-area-inset-bottom, 0px);
   }
-
   html, body {
-    height: 100%;
-    background: var(--bg);
-    color: var(--text);
+    height: 100%; background: var(--bg); color: var(--text);
     font-family: 'SF Pro Text', -apple-system, 'Segoe UI', sans-serif;
-    font-size: 14px;
-    -webkit-font-smoothing: antialiased;
+    font-size: 14px; -webkit-font-smoothing: antialiased;
     overscroll-behavior: none;
   }
-
-  /* Force dark — ignore Telegram themeChanged */
   body { color-scheme: dark !important; }
+  #app { display: flex; flex-direction: column; height: 100dvh; max-width: 600px; margin: 0 auto; }
 
-  /* ── Layout ── */
+  header { padding: 16px 16px 0; flex-shrink: 0; }
+  .logo { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; color: var(--text); margin-bottom: 14px; }
+  .logo span { color: var(--accent); }
+
+  .tabs { display: flex; border-bottom: 1px solid var(--border); margin: 0 -16px; padding: 0 16px; }
+  .tab {
+    padding: 8px 16px 10px; cursor: pointer; color: var(--muted);
+    font-size: 13px; font-weight: 500; border-bottom: 2px solid transparent;
+    margin-bottom: -1px; background: none; border-top: none; border-left: none; border-right: none;
+    user-select: none;
+  }
+  .tab.active { color: var(--text); border-bottom-color: var(--accent); }
+
+  .search-row { display: flex; gap: 8px; padding: 14px 16px 0; flex-shrink: 0; }
+  .search-row input {
+    flex: 1; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; color: var(--text); font-size: 14px; padding: 9px 12px; outline: none;
+  }
+  .search-row input::placeholder { color: var(--muted); }
+  .search-row input:focus { border-color: #3a3a3a; }
+  .search-row button {
+    background: var(--accent); color: #fff; border: none; border-radius: 8px;
+    padding: 9px 16px; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .search-row button:active { opacity: 0.85; }
+
+  .status { padding: 12px 16px 0; color: var(--muted); font-size: 13px; min-height: 28px; flex-shrink: 0; }
+
+  .scroll-area {
+    flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+    padding: 10px 16px;
+    padding-bottom: calc(var(--player-h) + var(--safe-bot) + 16px);
+  }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+
+  .card {
+    background: var(--card); border-radius: 10px; overflow: hidden;
+    cursor: pointer; border: 1px solid var(--border);
+    -webkit-tap-highlight-color: transparent; position: relative;
+  }
+  .card:active { opacity: 0.8; }
+  .card.playing { border-color: var(--accent); }
+  .card-art { width: 100%; aspect-ratio: 1; object-fit: cover; background: var(--surface); display: block; }
+  .card-art-placeholder {
+    width: 100%; aspect-ratio: 1; background: var(--surface);
+    display: flex; align-items: center; justify-content: center; font-size: 32px; color: var(--muted);
+  }
+  .card-info { padding: 8px 10px 10px; }
+  .card-title { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 3px; }
+  .card-artist { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px; }
+  .card-bottom { display: flex; justify-content: space-between; align-items: center; }
+  .card-duration { font-size: 11px; color: var(--muted); }
+  .fav-btn { background: none; border: none; cursor: pointer; font-size: 14px; padding: 0; line-height: 1; }
+
+  .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty-icon { font-size: 48px; margin-bottom: 12px; }
+
+  /* ── Player: YouTube iframe зафиксирован внизу ── */
+  #player-bar {
+    position: fixed; bottom: 0; left: 50%; transform: translateX(-50%);
+    width: 100%; max-width: 600px;
+    background: var(--surface); border-top: 1px solid var(--border);
+    padding: 10px 16px; padding-bottom: calc(10px + var(--safe-bot));
+    z-index: 100; display: none;
+  }
+  #player-bar.visible { display: block; }
+
+  .player-meta { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .player-art { width: 38px; height: 38px; border-radius: 6px; object-fit: cover; background: var(--card); flex-shrink: 0; }
+  .player-text { flex: 1; min-width: 0; }
+  .player-title { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .player-artist { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .player-yt-link { font-size: 11px; color: var(--accent); text-decoration: none; flex-shrink: 0; }
+
+  #yt-frame {
+    width: 100%; height: 180px; border: none; border-radius: 8px;
+    background: #000;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo">Sound<span>Club</span></div>
+    <div class="tabs">
+      <button class="tab active" data-tab="search" onclick="switchTab('search')">Поиск</button>
+      <button class="tab" data-tab="fav" onclick="switchTab('fav')">Избранное</button>
+    </div>
+  </header>
+
+  <div id="tab-search">
+    <div class="search-row">
+      <input id="q" type="search" placeholder="Исполнитель или трек…" autocomplete="off"
+             onkeydown="if(event.key==='Enter'){doSearch()}">
+      <button onclick="doSearch()">Искать</button>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="scroll-area"><div class="grid" id="results"></div></div>
+  </div>
+
+  <div id="tab-fav" style="display:none">
+    <div class="status"></div>
+    <div class="scroll-area"><div class="grid" id="fav-results"></div></div>
+  </div>
+</div>
+
+<!-- Player -->
+<div id="player-bar">
+  <div class="player-meta">
+    <img id="p-art" class="player-art" src="" alt="">
+    <div class="player-text">
+      <div class="player-title" id="p-title">—</div>
+      <div class="player-artist" id="p-artist">—</div>
+    </div>
+    <a id="p-yt-link" class="player-yt-link" href="#" target="_blank">YouTube ↗</a>
+  </div>
+  <iframe id="yt-frame" src="" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+</div>
+
+<script>
+const API = "";
+let currentTab = "search";
+let currentTrack = null;
+let favorites = JSON.parse(localStorage.getItem("sc_favs") || "{}");
+const trackCache = {};
+
+if (window.Telegram?.WebApp) {
+  Telegram.WebApp.ready();
+  Telegram.WebApp.expand();
+  Telegram.WebApp.onEvent("themeChanged", () => {});
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
+  document.getElementById("tab-search").style.display = tab === "search" ? "" : "none";
+  document.getElementById("tab-fav").style.display    = tab === "fav"    ? "" : "none";
+  if (tab === "fav") renderFavs();
+}
+
+async function doSearch() {
+  const q = document.getElementById("q").value.trim();
+  if (!q) return;
+  setStatus("Поиск…");
+  document.getElementById("results").innerHTML = "";
+  try {
+    const res = await fetch(`${API}/search?q=${encodeURIComponent(q)}&limit=30`);
+    const data = await res.json();
+    if (data.error) return setStatus("Ошибка: " + data.error);
+    data.tracks.forEach(t => { trackCache[t.id] = t; });
+    renderTracks(data.tracks, document.getElementById("results"));
+    setStatus(data.tracks.length ? `Найдено: ${data.tracks.length}` : "Ничего не найдено");
+  } catch (e) { setStatus("Ошибка сети: " + e.message); }
+}
+
+function setStatus(t) { document.getElementById("status").textContent = t; }
+
+function renderTracks(tracks, container) {
+  if (!tracks.length) {
+    container.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="empty-icon">🎵</div><div>Нет треков</div></div>`;
+    return;
+  }
+  container.innerHTML = tracks.map(t => cardHTML(t)).join("");
+}
+
+function cardHTML(t) {
+  const isFav     = !!favorites[t.id];
+  const isPlaying = currentTrack?.id === t.id;
+  const artEl = t.artwork
+    ? `<img class="card-art" src="${t.artwork}" alt="" loading="lazy">`
+    : `<div class="card-art-placeholder">▶</div>`;
+  return `
+    <div class="card ${isPlaying ? "playing" : ""}" id="card-${t.id}" onclick="playTrack('${t.id}')">
+      ${artEl}
+      <div class="card-info">
+        <div class="card-title">${esc(t.title)}</div>
+        <div class="card-artist">${esc(t.artist)}</div>
+        <div class="card-bottom">
+          <span class="card-duration">${fmtMs(t.duration)}</span>
+          <button class="fav-btn" onclick="event.stopPropagation();toggleFav('${t.id}')" id="fav-${t.id}">${isFav ? "❤️" : "🤍"}</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+async function playTrack(id) {
+  const track = trackCache[id] || favorites[id];
+  if (!track) return;
+
+  document.querySelectorAll(".card").forEach(c => c.classList.remove("playing"));
+  const card = document.getElementById("card-" + id);
+  if (card) card.classList.add("playing");
+
+  currentTrack = track;
+  document.getElementById("p-title").textContent  = track.title;
+  document.getElementById("p-artist").textContent = track.artist;
+  document.getElementById("p-art").src            = track.artwork || "";
+  document.getElementById("p-yt-link").href       = `https://youtube.com/watch?v=${track.videoId}`;
+  document.getElementById("player-bar").classList.add("visible");
+
+  try {
+    const res  = await fetch(`${API}/stream?id=${track.videoId}`);
+    const data = await res.json();
+    document.getElementById("yt-frame").src = data.embedUrl;
+  } catch (e) {
+    setStatus("Ошибка воспроизведения: " + e.message);
+  }
+}
+
+function toggleFav(id) {
+  const track = trackCache[id] || favorites[id];
+  if (!track) return;
+  if (favorites[id]) { delete favorites[id]; }
+  else { favorites[id] = track; }
+  localStorage.setItem("sc_favs", JSON.stringify(favorites));
+  const btn = document.getElementById("fav-" + id);
+  if (btn) btn.textContent = favorites[id] ? "❤️" : "🤍";
+  if (currentTab === "fav") renderFavs();
+}
+
+function renderFavs() {
+  const tracks = Object.values(favorites);
+  tracks.forEach(t => { trackCache[t.id] = t; });
+  const container = document.getElementById("fav-results");
+  if (!tracks.length) {
+    container.innerHTML = `<div class="empty" style="grid-column:1/-1"><div class="empty-icon">🤍</div><div>Нет избранных треков</div></div>`;
+    return;
+  }
+  renderTracks(tracks, container);
+}
+
+function fmtMs(ms) {
+  const s = Math.floor(ms / 1000);
+  const m = Math.floor(s / 60);
+  return `${m}:${String(s % 60).padStart(2, "0")}`;
+}
+
+Object.values(favorites).forEach(t => { trackCache[t.id] = t; });
+
+document.getElementById("q").addEventListener("focus", () => {
+  setTimeout(() => document.getElementById("q").scrollIntoView({ behavior: "smooth", block: "center" }), 300);
+});
+</script>
+</body>
+</html>  /* ── Layout ── */
   #app {
     display: flex;
     flex-direction: column;
