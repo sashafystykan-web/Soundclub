@@ -1,7 +1,7 @@
 require("dotenv").config();
-const express  = require("express");
-const cors     = require("cors");
-const path     = require("path");
+const express = require("express");
+const cors    = require("cors");
+const path    = require("path");
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -37,7 +37,7 @@ function looksLikeMusic(title, channelTitle, categoryId) {
   return String(categoryId) === "10";
 }
 
-// GET /search?q=...&limit=20
+// ─── GET /search?q=...&limit=20 ───────────────────────────────────────────────
 app.get("/search", async (req, res) => {
   const q     = req.query.q;
   const limit = Math.min(parseInt(req.query.limit) || 20, 50);
@@ -45,12 +45,12 @@ app.get("/search", async (req, res) => {
   if (!YT_API_KEY) return res.status(500).json({ error: "YT_API_KEY not set" });
 
   try {
-    const searchUrl = `${YT_BASE}/search?part=snippet&type=video&videoCategoryId=10&q=${encodeURIComponent(q)}&maxResults=50&key=${YT_API_KEY}`;
+    const searchUrl  = `${YT_BASE}/search?part=snippet&type=video&videoCategoryId=10&q=${encodeURIComponent(q)}&maxResults=50&key=${YT_API_KEY}`;
     const searchData = await ytFetch(searchUrl);
     const ids = (searchData.items || []).map(i => i.id.videoId).join(",");
     if (!ids) return res.json({ tracks: [] });
 
-    const detailUrl = `${YT_BASE}/videos?part=contentDetails,snippet&id=${ids}&key=${YT_API_KEY}`;
+    const detailUrl  = `${YT_BASE}/videos?part=contentDetails,snippet&id=${ids}&key=${YT_API_KEY}`;
     const detailData = await ytFetch(detailUrl);
 
     const tracks = (detailData.items || [])
@@ -72,6 +72,47 @@ app.get("/search", async (req, res) => {
     res.json({ tracks });
   } catch (err) {
     console.error("/search error:", err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+// ─── GET /stream/:videoId ─────────────────────────────────────────────────────
+// Streams audio via ytdl-core. Install: npm install ytdl-core
+app.get("/stream/:id", async (req, res) => {
+  const videoId = req.params.id;
+  if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) {
+    return res.status(400).json({ error: "Invalid videoId" });
+  }
+
+  try {
+    const ytdl = require("ytdl-core");
+    const url   = `https://www.youtube.com/watch?v=${videoId}`;
+
+    // Validate & get info first
+    const info  = await ytdl.getInfo(url);
+    const title = info.videoDetails.title;
+
+    res.setHeader("Content-Type", "audio/mpeg");
+    res.setHeader("Content-Disposition", `inline; filename="${encodeURIComponent(title)}.mp3"`);
+    res.setHeader("Transfer-Encoding", "chunked");
+    res.setHeader("Accept-Ranges", "none");
+
+    const stream = ytdl(url, {
+      filter:  "audioonly",
+      quality: "highestaudio",
+    });
+
+    stream.on("error", (err) => {
+      console.error("Stream error:", err.message);
+      if (!res.headersSent) res.status(502).json({ error: err.message });
+      else res.end();
+    });
+
+    req.on("close", () => stream.destroy());
+    stream.pipe(res);
+
+  } catch (err) {
+    console.error("/stream error:", err.message);
     res.status(502).json({ error: err.message });
   }
 });
